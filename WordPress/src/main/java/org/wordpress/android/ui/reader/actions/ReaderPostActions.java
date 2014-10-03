@@ -185,7 +185,7 @@ public class ReaderPostActions {
         new Thread() {
             @Override
             public void run() {
-                ReaderPost updatedPost = ReaderPost.fromJson(jsonObject);
+                ReaderPost updatedPost = ReaderPostListParser.parseSinglePost(jsonObject.toString());
                 boolean hasChanges =
                          ( updatedPost.numReplies != originalPost.numReplies
                         || updatedPost.numLikes != originalPost.numLikes
@@ -272,14 +272,16 @@ public class ReaderPostActions {
         com.wordpress.rest.RestRequest.Listener listener = new RestRequest.Listener() {
             @Override
             public void onResponse(JSONObject jsonObject) {
-                ReaderPost post = ReaderPost.fromJson(jsonObject);
-                // make sure the post has the passed blogId so it's saved correctly - necessary
-                // since the /sites/ endpoints return site_id="1" for Jetpack-powered blogs
-                post.blogId = blogId;
-                ReaderPostTable.addOrUpdatePost(post);
-                handlePostLikes(post, jsonObject);
+                ReaderPost post = ReaderPostListParser.parseSinglePost(jsonObject.toString());
+                if (post != null) {
+                    // make sure the post has the passed blogId so it's saved correctly - necessary
+                    // since the /sites/ endpoints return site_id="1" for Jetpack-powered blogs
+                    post.blogId = blogId;
+                    ReaderPostTable.addOrUpdatePost(post);
+                    handlePostLikes(post, jsonObject);
+                }
                 if (actionListener != null) {
-                    actionListener.onActionResult(true);
+                    actionListener.onActionResult(post != null);
                 }
             }
         };
@@ -371,21 +373,14 @@ public class ReaderPostActions {
                 listener,
                 errorListener);
         WordPress.requestQueue.add(request);
-        //WordPress.getRestClientUtils().get(sb.toString(), null, null, listener, errorListener);
     }
 
     private static void handleUpdatePostsWithTagResponse(final ReaderTag tag,
                                                          final ReaderActions.RequestDataAction updateAction,
                                                          final String response,
                                                          final ReaderActions.UpdateResultAndCountListener resultListener) {
-        if (TextUtils.isEmpty(response)) {
-            if (resultListener != null) {
-                resultListener.onUpdateResult(ReaderActions.UpdateResult.FAILED, -1);
-            }
-            return;
-        }
-        final Handler handler = new Handler();
 
+        final Handler handler = new Handler();
         new Thread() {
             @Override
             public void run() {
@@ -472,10 +467,11 @@ public class ReaderPostActions {
                 path += "&before=" + UrlUtils.urlEncode(dateOldest);
             }
         }
-        com.wordpress.rest.RestRequest.Listener listener = new RestRequest.Listener() {
+
+        Response.Listener<String> listener = new Response.Listener<String>() {
             @Override
-            public void onResponse(JSONObject jsonObject) {
-                handleGetPostsResponse(jsonObject, actionListener);
+            public void onResponse(String response) {
+                handleGetPostsResponse(response, actionListener);
             }
         };
         RestRequest.ErrorListener errorListener = new RestRequest.ErrorListener() {
@@ -488,20 +484,18 @@ public class ReaderPostActions {
             }
         };
         AppLog.d(T.READER, "updating posts in blog " + blogId);
-        WordPress.getRestClientUtils().get(path, null, null, listener, errorListener);
+        String url = RestClient.getAbsoluteURL(path);
+        StringRequest request = new StringRequest(
+                Request.Method.GET,
+                url,
+                listener,
+                errorListener);
+        WordPress.requestQueue.add(request);
     }
 
-    private static void handleGetPostsResponse(JSONObject jsonObject, final ReaderActions.ActionListener actionListener) {
-        if (jsonObject==null) {
-            if (actionListener != null) {
-                actionListener.onActionResult(false);
-            }
-            return;
-        }
-
-        ReaderPostList posts = ReaderPostList.fromJson(jsonObject);
+    private static void handleGetPostsResponse(final String response, final ReaderActions.ActionListener actionListener) {
+        final ReaderPostList posts = new ReaderPostListParser(response).parse();
         ReaderPostTable.addOrUpdatePosts(null, posts);
-
         if (actionListener != null) {
             actionListener.onActionResult(posts.size() > 0);
         }

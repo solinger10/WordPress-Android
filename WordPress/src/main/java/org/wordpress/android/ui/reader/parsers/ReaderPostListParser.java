@@ -1,15 +1,18 @@
 package org.wordpress.android.ui.reader.parsers;
 
+import android.os.Debug;
 import android.text.TextUtils;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 
 import org.wordpress.android.models.ReaderPost;
 import org.wordpress.android.models.ReaderPostList;
 import org.wordpress.android.ui.reader.utils.ReaderImageScanner;
+import org.wordpress.android.util.AppLog;
 import org.wordpress.android.util.DateTimeUtils;
 
 import java.text.BreakIterator;
@@ -36,17 +39,33 @@ public class ReaderPostListParser {
     }
 
     public ReaderPostList parse() {
+        //Debug.startMethodTracing("wordpress-gson");
         ReaderPostList posts = new ReaderPostList();
-        JsonArray jsonPostArray = getRootElement().getAsJsonObject().getAsJsonArray("posts");
-        for (JsonElement jsonPost: jsonPostArray) {
-            ReaderPost post = parseSinglePost(jsonPost);
-            posts.add(post);
+        try {
+            JsonArray jsonPostArray = getRootElement().getAsJsonObject().getAsJsonArray("posts");
+            for (JsonElement jsonPost : jsonPostArray) {
+                ReaderPost post = parseSinglePost(jsonPost);
+                posts.add(post);
+            }
+        } catch (JsonParseException e) {
+            AppLog.e(AppLog.T.READER, e);
         }
 
+        //Debug.stopMethodTracing();
         return posts;
     }
 
-    private ReaderPost parseSinglePost(JsonElement jsonPost) {
+    public static ReaderPost parseSinglePost(String jsonString) {
+        try {
+            JsonElement element = new JsonParser().parse(jsonString);
+            return parseSinglePost(element);
+        } catch (JsonParseException e) {
+            AppLog.e(AppLog.T.READER, e);
+            return null;
+        }
+    }
+
+    public static ReaderPost parseSinglePost(JsonElement jsonPost) {
         ReaderPost post = new ReaderPost();
         JsonObject json = jsonPost.getAsJsonObject();
 
@@ -59,7 +78,7 @@ public class ReaderPostListParser {
             post.setPseudoId(GsonUtils.getString(json, "global_ID"));  // sites/ endpoint
         }
 
-        post.setText(GsonUtils.getString(json, "text"));
+        post.setText(GsonUtils.getString(json, "content"));
         post.setExcerpt(GsonUtils.getStringStripHtml(json, "excerpt"));
         post.setTitle(GsonUtils.getStringStripHtml(json, "title"));
         post.setUrl(GsonUtils.getString(json, "URL"));
