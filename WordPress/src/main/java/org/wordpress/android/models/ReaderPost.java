@@ -363,7 +363,7 @@ public class ReaderPost {
             this.primaryTag = StringUtils.notNullStr(tagName);
         }
     }
-    boolean hasPrimaryTag() {
+    public boolean hasPrimaryTag() {
         return !TextUtils.isEmpty(primaryTag);
     }
 
