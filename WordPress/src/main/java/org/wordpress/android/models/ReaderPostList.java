@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Date;
 
 public class ReaderPostList extends ArrayList<ReaderPost> {
+
     public static ReaderPostList fromJson(JSONObject json) {
         if (json==null)
             throw new IllegalArgumentException("null json post list");
@@ -24,16 +25,18 @@ public class ReaderPostList extends ArrayList<ReaderPost> {
     }
 
     private int indexOfPost(long blogId, long postId) {
-        for (int i=0; i < size(); i++) {
-            if (this.get(i).blogId==blogId && this.get(i).postId==postId)
+        for (int i = 0; i < size(); i++) {
+            if (this.get(i).blogId == blogId && this.get(i).postId == postId) {
                 return i;
+            }
         }
         return -1;
     }
 
     public int indexOfPost(ReaderPost post) {
-        if (post==null)
+        if (post == null) {
             return -1;
+        }
         return indexOfPost(post.blogId, post.postId);
     }
 

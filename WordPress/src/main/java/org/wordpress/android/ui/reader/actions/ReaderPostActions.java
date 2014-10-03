@@ -3,7 +3,11 @@ package org.wordpress.android.ui.reader.actions;
 import android.os.Handler;
 import android.text.TextUtils;
 
+import com.android.volley.Request;
+import com.android.volley.Response;
 import com.android.volley.VolleyError;
+import com.android.volley.toolbox.StringRequest;
+import com.wordpress.rest.RestClient;
 import com.wordpress.rest.RestRequest;
 
 import org.json.JSONObject;
@@ -19,6 +23,7 @@ import org.wordpress.android.models.ReaderTagType;
 import org.wordpress.android.models.ReaderUserIdList;
 import org.wordpress.android.models.ReaderUserList;
 import org.wordpress.android.ui.reader.ReaderConstants;
+import org.wordpress.android.ui.reader.parsers.ReaderPostListParser;
 import org.wordpress.android.ui.reader.utils.ReaderUtils;
 import org.wordpress.android.util.AppLog;
 import org.wordpress.android.util.AppLog.T;
@@ -343,10 +348,10 @@ public class ReaderPostActions {
             AppLog.d(T.READER, "requesting posts in empty tag " + tag.getTagNameForLog());
         }
 
-        com.wordpress.rest.RestRequest.Listener listener = new RestRequest.Listener() {
+        Response.Listener<String> listener = new Response.Listener<String>() {
             @Override
-            public void onResponse(JSONObject jsonObject) {
-                handleUpdatePostsWithTagResponse(tag, updateAction, jsonObject, resultListener);
+            public void onResponse(String response) {
+                handleUpdatePostsWithTagResponse(tag, updateAction, response, resultListener);
             }
         };
         RestRequest.ErrorListener errorListener = new RestRequest.ErrorListener() {
@@ -359,14 +364,21 @@ public class ReaderPostActions {
             }
         };
 
-        WordPress.getRestClientUtils().get(sb.toString(), null, null, listener, errorListener);
+        String url = RestClient.getAbsoluteURL(sb.toString());
+        StringRequest request = new StringRequest(
+                Request.Method.GET,
+                url,
+                listener,
+                errorListener);
+        WordPress.requestQueue.add(request);
+        //WordPress.getRestClientUtils().get(sb.toString(), null, null, listener, errorListener);
     }
 
     private static void handleUpdatePostsWithTagResponse(final ReaderTag tag,
                                                          final ReaderActions.RequestDataAction updateAction,
-                                                         final JSONObject jsonObject,
+                                                         final String response,
                                                          final ReaderActions.UpdateResultAndCountListener resultListener) {
-        if (jsonObject == null) {
+        if (TextUtils.isEmpty(response)) {
             if (resultListener != null) {
                 resultListener.onUpdateResult(ReaderActions.UpdateResult.FAILED, -1);
             }
@@ -377,7 +389,8 @@ public class ReaderPostActions {
         new Thread() {
             @Override
             public void run() {
-                final ReaderPostList serverPosts = ReaderPostList.fromJson(jsonObject);
+                ReaderPostListParser parser = new ReaderPostListParser(response);
+                final ReaderPostList serverPosts = parser.parse();
 
                 // remember when this topic was updated if newer posts were requested, regardless of
                 // whether the response contained any posts
@@ -398,26 +411,12 @@ public class ReaderPostActions {
                     return;
                 }
 
-                // json "date_range" tells the the range of dates in the response, which we want to
-                // store for use the next time we request newer/older if this response contained any
-                // posts - note that freshly-pressed uses "newest" and "oldest" but other endpoints
-                // use "after" and "before"
-                JSONObject jsonDateRange = jsonObject.optJSONObject("date_range");
-                if (jsonDateRange != null) {
-                    switch (updateAction) {
-                        case LOAD_NEWER:
-                            String newest = jsonDateRange.has("before") ? JSONUtil.getString(jsonDateRange, "before") : JSONUtil.getString(jsonDateRange, "newest");
-                            if (!TextUtils.isEmpty(newest)) {
-                                ReaderTagTable.setTagNewestDate(tag, newest);
-                            }
-                            break;
-                        case LOAD_OLDER:
-                            String oldest = jsonDateRange.has("after") ? JSONUtil.getString(jsonDateRange, "after") : JSONUtil.getString(jsonDateRange, "oldest");
-                            if (!TextUtils.isEmpty(oldest)) {
-                                ReaderTagTable.setTagOldestDate(tag, oldest);
-                            }
-                            break;
-                    }
+                // remember the date range of these posts so next time we can request newer/older posts
+                ReaderPostListParser.ReaderDateRange dateRange = parser.getDateRange();
+                if (updateAction == ReaderActions.RequestDataAction.LOAD_NEWER && !TextUtils.isEmpty(dateRange.before)) {
+                    ReaderTagTable.setTagNewestDate(tag, dateRange.before);
+                } else if (updateAction == ReaderActions.RequestDataAction.LOAD_OLDER && !TextUtils.isEmpty(dateRange.after)) {
+                    ReaderTagTable.setTagOldestDate(tag, dateRange.after);
                 }
 
                 // remember whether there were existing posts with this tag before adding
