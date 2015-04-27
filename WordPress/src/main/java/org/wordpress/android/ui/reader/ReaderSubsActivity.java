@@ -42,6 +42,7 @@ import org.wordpress.android.ui.reader.services.ReaderUpdateService.UpdateTask;
 import org.wordpress.android.util.DisplayUtils;
 import org.wordpress.android.util.EditTextUtils;
 import org.wordpress.android.util.NetworkUtils;
+import org.wordpress.android.util.StringUtils;
 import org.wordpress.android.util.ToastUtils;
 import org.wordpress.android.util.UrlUtils;
 
@@ -352,8 +353,6 @@ public class ReaderSubsActivity extends ActionBarActivity
         ReaderTag tag = new ReaderTag(tagName, ReaderTagType.FOLLOWED);
 
         if (ReaderTagActions.performTagAction(tag, TagAction.ADD, actionListener)) {
-            showInfoToast(getString(R.string.reader_label_added_tag, tagName));
-            getPageAdapter().refreshTagFragments();
             onTagAction(tag, TagAction.ADD);
         }
     }
@@ -456,7 +455,7 @@ public class ReaderSubsActivity extends ActionBarActivity
                 mLastAddedTagName = tag.getTagName();
                 // user added from recommended tags, make sure addition is reflected on followed tags
                 getPageAdapter().refreshTagFragments(ReaderTagType.FOLLOWED);
-                showInfoToast(getString(R.string.reader_label_added_tag, tag.getTagName()));
+                showInfoToast(getString(R.string.reader_label_added_tag, tag.getCapitalizedTagName()));
                 break;
 
             case DELETE:
