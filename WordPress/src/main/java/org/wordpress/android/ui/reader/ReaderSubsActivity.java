@@ -460,7 +460,7 @@ public class ReaderSubsActivity extends ActionBarActivity
 
             case DELETE:
                 AnalyticsTracker.track(AnalyticsTracker.Stat.READER_UNFOLLOWED_READER_TAG);
-                if (mLastAddedTagName != null && mLastAddedTagName.equalsIgnoreCase(tag.getTagName())) {
+                if (mLastAddedTagName != null && mLastAddedTagName.equalsIgnoreCase(tag.getCapitalizedTagName())) {
                     mLastAddedTagName = null;
                 }
                 // user deleted from followed tags, make sure deletion is reflected on recommended tags
